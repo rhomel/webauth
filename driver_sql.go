@@ -116,7 +116,7 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
         return nil, err, false
     }
 
-    stmt, err := tx.Prepare("INSERT INTO users (userid, username, email, password, resettoken, tokenexpiration, locked, failedattempts, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'internal')")
+    stmt, err := tx.Prepare("INSERT INTO users (username, email, password, resettoken, tokenexpiration, locked, failedattempts, type) VALUES (?, ?, ?, ?, ?, ?, ?, 'internal')")
     if err != nil {
         log.Fatal(err)
         return nil, err, false
@@ -126,7 +126,7 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
     log.Println(record.String())
     record.SetPassword(password)
 
-    _, err = stmt.Exec(record.UserId, record.User, record.Email, record.Password, record.ResetToken, record.GetTokenExpirationIso(), record.Locked, record.FailedAttempts)
+    _, err = stmt.Exec(record.User, record.Email, record.Password, record.ResetToken, record.GetTokenExpirationIso(), record.Locked, record.FailedAttempts)
     defer stmt.Close()
 
     if err != nil {
