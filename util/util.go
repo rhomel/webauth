@@ -3,9 +3,14 @@ Utility functions (currently mostly string sanitizing functions)
 */
 package util
 
-import "regexp"
-import "unicode"
-import "bytes"
+import (
+    "regexp"
+    "unicode"
+    "bytes"
+    "io"
+    "io/ioutil"
+    "encoding/json"
+)
 
 var ReEmailFormat *regexp.Regexp
 
@@ -35,5 +40,37 @@ for emails that follow the format: a@b.c
 */
 func IsProbablyEmailFormat(email string) bool {
     return ReEmailFormat.MatchString(email)
+}
+
+/*
+Decode a bunch of JSON (usually from an http Request body) into 
+a struct (or interface{}).
+
+The read []byte body and an error (if any) are returned.
+*/
+func JsonDecode(body io.Reader, outputStruct interface{}) ([]byte, error) {
+
+    byteBody, err := ioutil.ReadAll( body )
+    if err != nil {
+        return nil, err
+    }
+
+    json.Unmarshal(byteBody, &outputStruct)
+
+    return byteBody, err
+}
+
+/*
+Same as JsonDecode but with a limit reader to limit the number of bytes read.
+*/
+func JsonDecodeLimit(body io.Reader, outputStruct interface{}, limit int64) ([]byte, error) {
+    return JsonDecode(io.LimitReader(body, limit), outputStruct)
+}
+
+/*
+Short-hand for JsonDecodeLimit(body, out, 1000)
+*/
+func JsonDecodeShort(body io.Reader, outputStruct interface{}) ([]byte, error) {
+    return JsonDecodeLimit(body, outputStruct, 1000)
 }
 
