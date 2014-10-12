@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rhomel/webauth/util"
 	//_ "github.com/mxk/go-sqlite/sqlite3"
 	"io/ioutil"
 	"log"
@@ -376,12 +377,20 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 		cleanup() // cleanup test data from previous runs
 	}
 
+	var authDriver *DriverSql
+
 	switch dbDriver {
 	case "sqlite3":
-		//db, err = sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
-		db, err = sql.Open(dbDriver, DbFile)
+		authDriver = NewDriverSqlNoConnectionCache(dbDriver, func() (*sql.DB, error) {
+			//return sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
+			return sql.Open(dbDriver, DbFile)
+		})
+		util.Debug(true) // still having difficulty with the sqlite connection
 	case "postgres":
-		db, err = sql.Open(dbDriver, "user=teek dbname=test sslmode=disable")
+		pgConnectionString := fmt.Sprintf("user=%v dbname=test sslmode=disable", os.Getenv("USER"))
+		log.Printf("Postgres Connection String: %v\n", pgConnectionString)
+		db, err = sql.Open(dbDriver, pgConnectionString)
+		authDriver = NewDriverSql(dbDriver, db)
 	}
 
 	if err != nil {
@@ -393,7 +402,7 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 	}
 
 	authHandler := NewAuthenticationHandler(hashKey, blockKey, paths)
-	authHandler.SetInternalDriver(NewDriverSql(dbDriver, db))
+	authHandler.SetInternalDriver(authDriver)
 	authHandler.RegisterHandlers(nil, outputHandler) // in = nil : defaults to http.Handle/http.HandleFunc
 
 	log.Println("Starting webserver...")
