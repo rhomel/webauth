@@ -2,4 +2,7 @@
 
 Complete web-based authentication system for web apps. Compatible with the default net/http package.
 
+# Not Finished
+
+This isn't finished yet. There's a bug in the sqlite driver that is stalling things for now.
 

@@ -350,7 +350,7 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 	var err error
 
 	dbDriver = "sqlite3"
-	dbDriver = "postgres"
+	//dbDriver = "postgres"
 	log.Printf("Using database driver: %v", dbDriver)
 
 	var cleanup func()
