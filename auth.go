@@ -321,7 +321,7 @@ func (a *AuthenticationHandler) ServeJsonAuthenticate(w http.ResponseWriter, r *
 
     record, err := a.internalDriver.GetInternalAuthRecord(input.User)
 
-    if err != nil {
+    if err != nil || record == nil {
         writeJsonInvalidLogin(w)
         return
     }
@@ -550,6 +550,9 @@ func (a *AuthenticationHandler) ServeHTTP(response http.ResponseWriter, request 
     }
 
     a.Log.Println("Not logged in, redirecting to login page.")
+    for _,cookie := range request.Cookies() {
+        a.Log.Printf("Request cookie: %v\n", cookie)
+    }
     a.LogFile.Flush()
 
     // invalid cookie, or not logged in
