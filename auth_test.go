@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	//_ "github.com/mxk/go-sqlite/sqlite3"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -339,18 +341,55 @@ func TestLoginIncorrectCreds(t *testing.T) {
 
 func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 
-	_ = os.Remove(DbFile)
-
 	hashKey := "89408df15babfd94d259a508721e7cadf67cee8f731d8bba54c6426540e1e13de7c73ceed0c9d66571d5be8de19486431a0ac32307a6e3523a20f40a5e8f8d46"
 	blockKey := "8ce6d0be2d7def9a73849748ea3ba6a21e4b82920282ee50d70f685d3e04ca92"
 
-	dbDriver := "sqlite3"
-	//db, err := sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
-	db, err := sql.Open(dbDriver, DbFile)
-	db.SetMaxOpenConns(10)
+	var dbDriver string
+	var db *sql.DB
+	var err error
+
+	dbDriver = "sqlite3"
+	dbDriver = "postgres"
+	log.Printf("Using database driver: %v", dbDriver)
+
+	var cleanup func()
+	if dbDriver == "sqlite3" {
+		cleanup = func() {
+			log.Println("Cleaning up test data.")
+			_ = os.Remove(DbFile)
+		}
+	} else {
+		cleanup = func() {
+			log.Println("Cleaning up test data.")
+			tx, err := db.Begin()
+			_, err = tx.Exec("DELETE FROM users")
+			if err != nil {
+				log.Fatalln("Couldn't cleanup test data.")
+			}
+			if err := tx.Commit(); err != nil {
+				log.Fatalln("Couldn't commit cleanup of test data.")
+			}
+		}
+	}
+
+	if dbDriver == "sqlite3" {
+		cleanup() // cleanup test data from previous runs
+	}
+
+	switch dbDriver {
+	case "sqlite3":
+		//db, err = sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
+		db, err = sql.Open(dbDriver, DbFile)
+	case "postgres":
+		db, err = sql.Open(dbDriver, "user=teek dbname=test sslmode=disable")
+	}
+
 	if err != nil {
 		log.Fatal(err)
 		return
+	}
+	if dbDriver != "sqlite3" {
+		cleanup() // cleanup test data from previous runs
 	}
 
 	authHandler := NewAuthenticationHandler(hashKey, blockKey, paths)

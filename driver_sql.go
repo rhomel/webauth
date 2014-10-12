@@ -6,6 +6,7 @@ SQL Database Driver
 
 import "database/sql"
 import "log"
+import "github.com/rhomel/webauth/util"
 import "errors"
 import "runtime/debug"
 
@@ -13,7 +14,7 @@ func init() {
 	log.SetFlags(log.Lshortfile)
 }
 
-const SqlCreateTablePg = `CREATE TABLE users (userid SERIAL PRIMARY KEY, username VARCHAR(256), email VARCHAR(256), password CHAR(60), resettoken VARCHAR(64), tokenexpiration DATE, locked INTEGER, failedattempts INTEGER, type VARCHAR(100))`
+const SqlCreateTablePg = `CREATE TABLE users (userid SERIAL PRIMARY KEY, username VARCHAR(256), email VARCHAR(256), password CHAR(60), resettoken VARCHAR(64), tokenexpiration DATE, locked BOOLEAN, failedattempts INTEGER, type VARCHAR(100))`
 
 const SqlCreateTableSqlite = `CREATE TABLE users (userid INTEGER PRIMARY KEY autoincrement, username VARCHAR(256), email VARCHAR(256), password CHAR(60), resettoken VARCHAR(64), tokenexpiration DATE, locked INTEGER, failedattempts INTEGER, type VARCHAR(100))`
 
@@ -33,7 +34,7 @@ func EndTx(tx *sql.Tx, call string) error {
 	}
 
 	if err != nil {
-		log.Printf("WARNING: %v returned an error", call)
+		util.DPrintf("WARNING: %v returned an error", call)
 	}
 
 	return err
@@ -59,17 +60,20 @@ func NewDriverSql(dbtype string, db *sql.DB) *DriverSql {
 }
 
 func (d *DriverSql) Initialize() error {
-	log.Println("SQL Select")
+	util.DPrintln("SQL Select")
 	rows, err := d.db.Query("SELECT COUNT(*) FROM users")
+	if rows != nil {
+		rows.Close()
+	}
 
 	if err != nil {
 		// table most likely doesn't exist, create it
 		var sqlCreate string
 
 		switch d.dbtype {
-		case "pg", "pgsql", "postgres", "postgresql":
+		case "postgres":
 			sqlCreate = SqlCreateTablePg
-		case "sqlite", "sqlite3":
+		case "sqlite3":
 			sqlCreate = SqlCreateTableSqlite
 		default:
 			err := errors.New("Unsupported Database type: " + d.dbtype)
@@ -83,8 +87,6 @@ func (d *DriverSql) Initialize() error {
 			log.Fatal(err)
 			return err
 		}
-	} else {
-		rows.Close()
 	}
 
 	// query succeeded, no need to create the table
@@ -103,8 +105,8 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
 	var err error
 
 	// verify email doesn't exist
-	log.Println("SQL Select")
-	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and email=?", email)
+	util.DPrintln("SQL Select")
+	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and email = $1", email)
 	if err != nil {
 		log.Fatal(err)
 		return nil, err, false
@@ -123,8 +125,8 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
 	rows.Close()
 
 	// verify user doesn't exist
-	log.Println("SQL Select")
-	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and username=?", user)
+	util.DPrintln("SQL Select")
+	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and username = $1", user)
 	if err != nil {
 		log.Fatal(err)
 		return nil, err, false
@@ -144,9 +146,9 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
 
 	// insert
 	tx, err := BeginTx(d.db)
-	log.Printf("SQL Start Transaction")
+	util.DPrintf("SQL Start Transaction")
 	if err != nil {
-		log.Printf("Executing transaction count: %v\n", ExecutingTransactions)
+		util.DPrintf("Executing transaction count: %v\n", ExecutingTransactions)
 		debug.PrintStack()
 		log.Fatal(err)
 		return nil, err, false
@@ -154,18 +156,27 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
 
 	//defer EndTx(tx, Rollback)
 
-	log.Println("SQL Insert")
-	stmt, err := tx.Prepare("INSERT INTO users (username, email, password, resettoken, tokenexpiration, locked, failedattempts, type) VALUES (?, ?, ?, ?, ?, ?, ?, 'internal')")
+	util.DPrintln("SQL Insert")
+	stmt, err := tx.Prepare("INSERT INTO users (username, email, password, resettoken, tokenexpiration, locked, failedattempts, type) VALUES ($1, $2, $3, $4, $5, $6, $7, 'internal')")
 	if err != nil {
 		log.Fatal(err)
 		return nil, err, false
 	}
 
 	record := NewBasicInternalAuthRecord(user, email)
-	log.Println(record.String())
+	util.DPrintln(record.String())
 	record.SetPassword(password)
 
-	_, err = stmt.Exec(record.User, record.Email, record.Password, record.ResetToken, record.GetTokenExpirationIso(), record.Locked, record.FailedAttempts)
+	var tokenExpiration interface{}
+
+	if d.dbtype == "sqlite3" {
+		// sqlite doesn't have a date type
+		tokenExpiration = record.GetTokenExpirationIso()
+	} else {
+		tokenExpiration = record.GetTokenExpiration()
+	}
+
+	_, err = stmt.Exec(record.User, record.Email, record.Password, record.ResetToken, tokenExpiration, record.Locked, record.FailedAttempts)
 	stmt.Close()
 
 	if err != nil {
@@ -177,7 +188,7 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
 		log.Fatalf("Error attempting to commit transaction: %v", err)
 	}
 
-	log.Printf("SQL End Transaction")
+	util.DPrintf("SQL End Transaction")
 
 	// do this to get the userid generated by the database
 	returnRecord, _ := d.GetInternalAuthRecord(record.User)
@@ -186,8 +197,8 @@ func (d *DriverSql) NewInternalAuthRecord(user string, email string, password st
 }
 
 func (d *DriverSql) GetInternalAuthRecord(user string) (AuthInternalRecord, error) {
-	log.Println("SQL Select")
-	rows, err := d.db.Query("SELECT userid, username, email, password, resettoken, tokenexpiration, locked, failedattempts FROM users WHERE type='internal' and username=?", user)
+	util.DPrintln("SQL Select")
+	rows, err := d.db.Query("SELECT userid, username, email, password, resettoken, tokenexpiration, locked, failedattempts FROM users WHERE type='internal' and username = $1", user)
 	defer rows.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -197,14 +208,14 @@ func (d *DriverSql) GetInternalAuthRecord(user string) (AuthInternalRecord, erro
 		return nil, nil
 	}
 
-	record := newRecord(rows)
+	record := d.newRecord(rows)
 
 	return record, nil
 }
 
 func (d *DriverSql) GetInternalAuthRecordByEmail(email string) (AuthInternalRecord, error) {
-	log.Println("SQL Select")
-	rows, err := d.db.Query("SELECT userid, username, email, password, resettoken, tokenexpiration, locked, failedattempts FROM users WHERE type='internal' and email=?", email)
+	util.DPrintln("SQL Select")
+	rows, err := d.db.Query("SELECT userid, username, email, password, resettoken, tokenexpiration, locked, failedattempts FROM users WHERE type='internal' and email = $1", email)
 	defer rows.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -214,17 +225,22 @@ func (d *DriverSql) GetInternalAuthRecordByEmail(email string) (AuthInternalReco
 		return nil, nil
 	}
 
-	record := newRecord(rows)
+	record := d.newRecord(rows)
 
 	return record, nil
 }
 
-func newRecord(rows *sql.Rows) *BasicInternalAuthRecord {
+func (d *DriverSql) newRecord(rows *sql.Rows) *BasicInternalAuthRecord {
 	record := BasicInternalAuthRecord{}
 
-	var stime string
-	err := rows.Scan(&record.UserId, &record.User, &record.Email, &record.Password, &record.ResetToken, &stime, &record.Locked, &record.FailedAttempts)
-	record.SetTokenExpirationIso([]byte(stime))
+	var err error
+	if d.dbtype == "sqlite3" {
+		var stime string
+		err = rows.Scan(&record.UserId, &record.User, &record.Email, &record.Password, &record.ResetToken, &stime, &record.Locked, &record.FailedAttempts)
+		record.SetTokenExpirationIso([]byte(stime))
+	} else {
+		err = rows.Scan(&record.UserId, &record.User, &record.Email, &record.Password, &record.ResetToken, &record.TokenExpiration, &record.Locked, &record.FailedAttempts)
+	}
 
 	if err != nil {
 		log.Fatal(err)
@@ -241,7 +257,7 @@ func (d *DriverSql) UpdateInternalAuthRecord(record AuthInternalRecord) error {
 	var rows *sql.Rows
 
 	tx, err = BeginTx(d.db)
-	log.Printf("SQL Start Transaction")
+	util.DPrintf("SQL Start Transaction")
 	if err != nil {
 		log.Fatal(err)
 		_ = EndTx(tx, Rollback)
@@ -251,8 +267,8 @@ func (d *DriverSql) UpdateInternalAuthRecord(record AuthInternalRecord) error {
 	//defer EndTx(tx, Rollback)
 
 	// need to make sure there is no conflict with new username and new email
-	log.Println("SQL Select")
-	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and email=? and userid<>?", record.GetEmail(), record.GetUserId())
+	util.DPrintln("SQL Select")
+	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and email = $1 and userid <> $2", record.GetEmail(), record.GetUserId())
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -270,8 +286,8 @@ func (d *DriverSql) UpdateInternalAuthRecord(record AuthInternalRecord) error {
 
 	rows.Close()
 
-	log.Println("SQL Select")
-	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and user=? and userid<>?", record.GetUser(), record.GetUserId())
+	util.DPrintln("SQL Select")
+	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and user = $1 and userid <> $2", record.GetUser(), record.GetUserId())
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -290,8 +306,8 @@ func (d *DriverSql) UpdateInternalAuthRecord(record AuthInternalRecord) error {
 	rows.Close()
 
 	// ok to update
-	log.Println("SQL Update")
-	stmt, err := tx.Prepare("UPDATE users SET username=?, email=?, password=?, resettoken=?, tokenexpiration=?, locked=?, failedattempts=? WHERE type='internal' AND userid=?")
+	util.DPrintln("SQL Update")
+	stmt, err := tx.Prepare("UPDATE users SET username = $1, email = $2, password = $3, resettoken = $4, tokenexpiration = $5, locked = $6, failedattempts = $7 WHERE type='internal' AND userid = $8")
 	if err != nil {
 		log.Fatal(err)
 		_ = EndTx(tx, Rollback)
@@ -310,7 +326,7 @@ func (d *DriverSql) UpdateInternalAuthRecord(record AuthInternalRecord) error {
 		log.Fatalf("Error attempting to commit transaction: %v", err)
 	}
 
-	log.Printf("SQL End Transaction")
+	util.DPrintf("SQL End Transaction")
 
 	return nil
 }
