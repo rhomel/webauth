@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
-	sqlite "github.com/mattn/go-sqlite3"
-	"github.com/rhomel/webauth/util"
+	//sqlite "github.com/mattn/go-sqlite3"
+	sqlite "github.com/rhomel/go-sqlite3" // Has Version func
+	//"github.com/rhomel/webauth/util"
 	//_ "github.com/mxk/go-sqlite/sqlite3"
 	"io/ioutil"
 	"log"
@@ -382,7 +383,8 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 
 	switch dbDriver {
 	case "sqlite3":
-		log.Printf("SQLite version: %v\n", sqlite.Version())
+		sqliteVersion, _, sqliteSourceId := sqlite.Version()
+		log.Printf("SQLite version: %v, source id: %v\n", sqliteVersion, sqliteSourceId)
 		/*
 			authDriver = NewDriverSqlNoConnectionCache(dbDriver, func() (*sql.DB, error) {
 				//return sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
@@ -391,7 +393,7 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 		*/
 		db, err = sql.Open(dbDriver, DbFile)
 		authDriver = NewDriverSql(dbDriver, db)
-		util.Debug(true) // still having difficulty with the sqlite connection
+		//util.Debug(true)
 	case "postgres":
 		pgConnectionString := fmt.Sprintf("user=%v dbname=test sslmode=disable", os.Getenv("USER"))
 		log.Printf("Postgres Connection String: %v\n", pgConnectionString)
