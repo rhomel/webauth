@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
+	sqlite "github.com/mattn/go-sqlite3"
 	"github.com/rhomel/webauth/util"
 	//_ "github.com/mxk/go-sqlite/sqlite3"
 	"io/ioutil"
@@ -349,6 +349,7 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 	var db *sql.DB
 	var err error
 
+	// Select Database Type
 	dbDriver = "sqlite3"
 	//dbDriver = "postgres"
 	log.Printf("Using database driver: %v", dbDriver)
@@ -381,10 +382,15 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 
 	switch dbDriver {
 	case "sqlite3":
-		authDriver = NewDriverSqlNoConnectionCache(dbDriver, func() (*sql.DB, error) {
-			//return sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
-			return sql.Open(dbDriver, DbFile)
-		})
+		log.Printf("SQLite version: %v\n", sqlite.Version())
+		/*
+			authDriver = NewDriverSqlNoConnectionCache(dbDriver, func() (*sql.DB, error) {
+				//return sql.Open(dbDriver, "testcase.db:locked.sqlite?cache=shared&mode=rwc")
+				return sql.Open(dbDriver, DbFile)
+			})
+		*/
+		db, err = sql.Open(dbDriver, DbFile)
+		authDriver = NewDriverSql(dbDriver, db)
 		util.Debug(true) // still having difficulty with the sqlite connection
 	case "postgres":
 		pgConnectionString := fmt.Sprintf("user=%v dbname=test sslmode=disable", os.Getenv("USER"))
