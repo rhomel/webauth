@@ -351,32 +351,22 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 	var err error
 
 	// Select Database Type
-	dbDriver = "sqlite3"
-	//dbDriver = "postgres"
-	log.Printf("Using database driver: %v", dbDriver)
-
-	var cleanup func()
-	if dbDriver == "sqlite3" {
-		cleanup = func() {
-			log.Println("Cleaning up test data.")
-			_ = os.Remove(DbFile)
-		}
-	} else {
-		cleanup = func() {
-			log.Println("Cleaning up test data.")
-			tx, err := db.Begin()
-			_, err = tx.Exec("DELETE FROM users")
-			if err != nil {
-				log.Fatalln("Couldn't cleanup test data.")
-			}
-			if err := tx.Commit(); err != nil {
-				log.Fatalln("Couldn't commit cleanup of test data.")
-			}
-		}
+	// Set the environment variable AUTHTEST_SQL_DRIVER to "postgres" or "sqlite3" (default sqlite3)
+	switch os.Getenv("AUTHTEST_SQL_DRIVER") {
+	case "postgres":
+		dbDriver = "postgres"
+	default:
+		dbDriver = "sqlite3"
 	}
 
-	if dbDriver == "sqlite3" {
-		cleanup() // cleanup test data from previous runs
+	log.Printf("Using database driver: %v", dbDriver)
+
+	cleanup := func() {
+		log.Println("Cleaning up test data (dropping user table).")
+		_, err = db.Exec("DROP TABLE users")
+		if err != nil {
+			log.Fatalln("Couldn't cleanup test data.")
+		}
 	}
 
 	var authDriver *DriverSql
@@ -405,9 +395,9 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 		log.Fatal(err)
 		return
 	}
-	if dbDriver != "sqlite3" {
-		cleanup() // cleanup test data from previous runs
-	}
+
+	// cleanup test data from previous runs
+	cleanup()
 
 	authHandler := NewAuthenticationHandler(hashKey, blockKey, paths)
 	authHandler.SetInternalDriver(authDriver)
