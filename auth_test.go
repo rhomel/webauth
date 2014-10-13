@@ -1,5 +1,24 @@
 package webauth
 
+/*
+Test the package at a high level (client HTTP requests).
+
+This tester will connect to a test database and DROP THE USER TABLE before running the actual tests.
+
+Available environment variables to set before testing:
+
+	AUTHTEST_DEBUG=1 // Turn on debugging: util.Debug(true)
+	AUTHTEST_SQL_DRIVER=postgres // Switch driver to postgres (sqlite is the default)
+
+Examples:
+
+	// Set driver to postgres
+	AUTHTEST_SQL_DRIVER=postgres go test
+
+	// Set driver to postgres and turn on debugging
+	AUTHTEST_DEBUG=1 AUTHTEST_SQL_DRIVER=postgres go test
+*/
+
 import (
 	"bytes"
 	"database/sql"
@@ -10,7 +29,7 @@ import (
 	_ "github.com/lib/pq"
 	//sqlite "github.com/mattn/go-sqlite3"
 	sqlite "github.com/rhomel/go-sqlite3" // Has Version func
-	//"github.com/rhomel/webauth/util"
+	"github.com/rhomel/webauth/util"
 	//_ "github.com/mxk/go-sqlite/sqlite3"
 	"io/ioutil"
 	"log"
@@ -187,6 +206,61 @@ func TestNewAccountMissingParametersWhiteSpaceUserName(t *testing.T) {
 	testCreateNewAccount(t, json, verifyBasicErrorFunc)
 }
 
+func verifyLoginSuccess(t *testing.T, rjson map[string]interface{}, response *http.Response) {
+
+	if rjson == nil {
+		t.Errorf("Received no response body")
+		t.FailNow()
+	}
+
+	if rjson["Success"].(float64) != 1 || rjson["Error"] != "" {
+		t.Errorf("Didn't create the new user account correctly. Received: %v", rjson)
+		t.FailNow()
+	}
+
+	cookies := response.Cookies()
+	found := false
+
+	// look for the login cookie
+	for _, cookie := range cookies {
+		if cookie.Name == "login" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Errorf("Didn't receive a login cookie.")
+		t.FailNow()
+	}
+}
+
+func verifyLoginFailure(t *testing.T, rjson map[string]interface{}, response *http.Response) {
+
+	if rjson == nil {
+		t.Errorf("Received no response body")
+		t.FailNow()
+	}
+
+	if rjson["Success"].(float64) != 0 || rjson["Error"] == "" {
+		t.Errorf("Didn't report expected failed login. Received: %v", rjson)
+	}
+
+	cookies := response.Cookies()
+	found := false
+
+	// look for the login cookie
+	for _, cookie := range cookies {
+		if cookie.Name == "login" {
+			found = true
+		}
+	}
+
+	if found {
+		t.Errorf("Received login cookie when shouldn't have due to incorrect login.")
+		t.FailNow()
+	}
+}
+
 func TestLoginBasic(t *testing.T) {
 	var json string
 	json = `{"User":"alice","Password":"WONDerful","Email":"alice@example.com"}`
@@ -197,31 +271,8 @@ func TestLoginBasic(t *testing.T) {
 	// try logging in
 	json = `{"User":"alice","Password":"WONDerful"}`
 	testLogin(t, json, func(t *testing.T, rjson map[string]interface{}, response *http.Response) {
-
-		if rjson == nil {
-			t.Errorf("Received no response body")
-			t.FailNow()
-		}
-
-		if rjson["Success"].(float64) != 1 || rjson["Error"] != "" {
-			t.Errorf("Didn't create the new user account correctly. Received: %v", rjson)
-			t.FailNow()
-		}
-
+		verifyLoginSuccess(t, rjson, response)
 		cookies = response.Cookies()
-		found := false
-
-		// look for the login cookie
-		for _, cookie := range cookies {
-			if cookie.Name == "login" {
-				found = true
-			}
-		}
-
-		if !found {
-			t.Errorf("Didn't receive a login cookie.")
-			t.FailNow()
-		}
 	})
 
 	// try accessing a protected resource that requires login
@@ -250,95 +301,38 @@ func TestLoginIncorrectCreds(t *testing.T) {
 	json = `{"User":"daveh","Password":"p0wnnnd!","Email":"daveh@example.com"}`
 	testCreateNewAccount(t, json, verifyBasicSuccessFunc)
 
-	var cookies []*http.Cookie
-
 	// try logging in (correctly)
 	json = `{"User":"daveh","Password":"p0wnnnd!"}`
-	testLogin(t, json, func(t *testing.T, rjson map[string]interface{}, response *http.Response) {
-
-		if rjson == nil {
-			t.Errorf("Received no response body")
-			t.FailNow()
-		}
-
-		if rjson["Success"].(float64) != 1 || rjson["Error"] != "" {
-			t.Errorf("Didn't create the new user account correctly. Received: %v", rjson)
-			t.FailNow()
-		}
-
-		cookies = response.Cookies()
-		found := false
-
-		// look for the login cookie
-		for _, cookie := range cookies {
-			if cookie.Name == "login" {
-				found = true
-			}
-		}
-
-		if !found {
-			t.Errorf("Didn't receive a login cookie.")
-			t.FailNow()
-		}
-	})
+	testLogin(t, json, verifyLoginSuccess)
 
 	// try logging in (incorrectly)
 	json = `{"User":"daveh","Password":"p0wnnd!"}`
-	testLogin(t, json, func(t *testing.T, rjson map[string]interface{}, response *http.Response) {
-
-		if rjson == nil {
-			t.Errorf("Received no response body")
-			t.FailNow()
-		}
-
-		if rjson["Success"].(float64) != 0 || rjson["Error"] == "" {
-			t.Errorf("Didn't report expected failed login. Received: %v", rjson)
-		}
-
-		cookies = response.Cookies()
-		found := false
-
-		// look for the login cookie
-		for _, cookie := range cookies {
-			if cookie.Name == "login" {
-				found = true
-			}
-		}
-
-		if found {
-			t.Errorf("Received login cookie when shouldn't have due to incorrect login.")
-			t.FailNow()
-		}
-	})
+	testLogin(t, json, verifyLoginFailure)
 
 	// try logging in (incorrectly again, this time with different user name)
 	json = `{"User":"davehh","Password":"p0wnnnd!"}`
-	testLogin(t, json, func(t *testing.T, rjson map[string]interface{}, response *http.Response) {
+	testLogin(t, json, verifyLoginFailure)
+}
 
-		if rjson == nil {
-			t.Errorf("Received no response body")
-			t.FailNow()
-		}
+func testChangePassword(t *testing.T, inputJson string, outputJsonVerifier func(*testing.T, map[string]interface{}, *http.Response)) {
+	testJsonHttpRequest(t, "POST", "/auth/internal/json/password/change", inputJson, nil, outputJsonVerifier)
+}
 
-		if rjson["Success"].(float64) != 0 || rjson["Error"] == "" {
-			t.Errorf("Didn't report expected failed login. Received: %v", rjson)
-		}
+func TestChangePassword(t *testing.T) {
+	var json string
+	json = `{"User":"forgetful","Password":"oopsIforgot!","Email":"forgetful@example.com"}`
+	testCreateNewAccount(t, json, verifyBasicSuccessFunc)
 
-		cookies = response.Cookies()
-		found := false
+	json = `{"User":"forgetful","Password":"oopsIforgot!","NewPassword":"oh no you didn't!"}`
+	testChangePassword(t, json, verifyBasicSuccessFunc)
 
-		// look for the login cookie
-		for _, cookie := range cookies {
-			if cookie.Name == "login" {
-				found = true
-			}
-		}
+	// try old password
+	json = `{"User":"forgetful","Password":"oopsIforgot!"}`
+	testLogin(t, json, verifyLoginFailure)
 
-		if found {
-			t.Errorf("Received login cookie when shouldn't have due to incorrect login.")
-			t.FailNow()
-		}
-	})
+	// try new password
+	json = `{"User":"forgetful","Password":"oh no you didn't!"}`
+	testLogin(t, json, verifyLoginSuccess)
 }
 
 func setupServer(outputHandler http.Handler, paths RedirectPaths) {
@@ -349,6 +343,13 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 	var dbDriver string
 	var db *sql.DB
 	var err error
+
+	// Turn on driver debugging if AUTHTEST_DEBUG is 1 or true
+	switch os.Getenv("AUTHTEST_DEBUG") {
+	case "1", "true":
+		util.Debug(true)
+	default:
+	}
 
 	// Select Database Type
 	// Set the environment variable AUTHTEST_SQL_DRIVER to "postgres" or "sqlite3" (default sqlite3)
@@ -383,7 +384,6 @@ func setupServer(outputHandler http.Handler, paths RedirectPaths) {
 		*/
 		db, err = sql.Open(dbDriver, DbFile)
 		authDriver = NewDriverSql(dbDriver, db)
-		//util.Debug(true)
 	case "postgres":
 		pgConnectionString := fmt.Sprintf("user=%v dbname=test sslmode=disable", os.Getenv("USER"))
 		log.Printf("Postgres Connection String: %v\n", pgConnectionString)
