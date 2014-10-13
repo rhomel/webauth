@@ -4,5 +4,5 @@ Complete web-based authentication system for web apps. Compatible with the defau
 
 # Not Finished
 
-This isn't finished yet. There's a bug in the sqlite driver that is stalling things for now.
+This isn't finished yet. 
 
