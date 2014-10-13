@@ -356,7 +356,7 @@ func (d *DriverSql) UpdateInternalAuthRecord(record AuthInternalRecord) error {
 	rows.Close()
 
 	util.DPrintln("SQL Select")
-	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and user = $1 and userid <> $2", record.GetUser(), record.GetUserId())
+	rows, err = d.db.Query("SELECT COUNT(*) FROM users WHERE type='internal' and username = $1 and userid <> $2", record.GetUser(), record.GetUserId())
 	if err != nil {
 		util.DPrintf("Error on query: %v", err)
 		return err
