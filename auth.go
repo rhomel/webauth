@@ -24,6 +24,7 @@ import "log"
 
 import "github.com/rhomel/webauth/mailer"
 import "github.com/rhomel/webauth/util"
+import "github.com/rhomel/webauth/password"
 
 const JsonMimeType string = "application/json"
 const MessageInvalidLogin = "invalid username or password"
@@ -111,6 +112,7 @@ type AuthenticationHandler struct {
 	Redirects        *RedirectPaths
 	Log              *log.Logger
 	LogFile          *bufio.Writer
+	StrengthFn       password.PasswordStrengthFunc
 }
 
 /*
@@ -169,8 +171,17 @@ func NewAuthenticationHandler(hashkey string, blockkey string, paths RedirectPat
 	return handler
 }
 
-func (a *AuthenticationHandler) InitResetTokenMailer(m mailer.ResetMailer) {
+// Register the token mailer. If no mailer is registered, emails will not be sent.
+func (a *AuthenticationHandler) RegisterResetTokenMailer(m mailer.ResetMailer) {
 	a.ResetTokenMailer = m
+}
+
+/*
+Register a password strength function. If no password strength function is registered
+the only password requirement is a non-empty string.
+*/
+func (a *AuthenticationHandler) RegisterPasswordStrengthFn(fn password.PasswordStrengthFunc) {
+	a.StrengthFn = fn
 }
 
 /*
@@ -366,6 +377,11 @@ func (a *AuthenticationHandler) ServeJsonNewAccount(w http.ResponseWriter, r *ht
 
 	if input.Password == "" {
 		writeJsonError(w, "Password cannot be empty")
+		return
+	}
+
+	if a.StrengthFn != nil && !a.StrengthFn(input.Password) {
+		writeJsonError(w, "Password is too weak")
 		return
 	}
 
