@@ -319,19 +319,23 @@ func testChangePassword(t *testing.T, inputJson string, outputJsonVerifier func(
 }
 
 func TestChangePassword(t *testing.T) {
+
+	startPass := "oopsIforgot!"
+	changePass := "oh no you didn't!"
+
 	var json string
-	json = `{"User":"forgetful","Password":"oopsIforgot!","Email":"forgetful@example.com"}`
+	json = `{"User":"forgetful","Password":"` + startPass + `","Email":"forgetful@example.com"}`
 	testCreateNewAccount(t, json, verifyBasicSuccessFunc)
 
-	json = `{"User":"forgetful","Password":"oopsIforgot!","NewPassword":"oh no you didn't!"}`
+	json = `{"User":"forgetful","Password":"` + startPass + `","NewPassword":"` + changePass + `"}`
 	testChangePassword(t, json, verifyBasicSuccessFunc)
 
 	// try old password
-	json = `{"User":"forgetful","Password":"oopsIforgot!"}`
+	json = `{"User":"forgetful","Password":"` + startPass + `"}`
 	testLogin(t, json, verifyLoginFailure)
 
 	// try new password
-	json = `{"User":"forgetful","Password":"oh no you didn't!"}`
+	json = `{"User":"forgetful","Password":"` + changePass + `"}`
 	testLogin(t, json, verifyLoginSuccess)
 }
 
