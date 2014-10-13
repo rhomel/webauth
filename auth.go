@@ -268,27 +268,27 @@ func (a *AuthenticationHandler) RegisterHandlers(in MinHandler, out http.Handler
 
 		a.Log.Println(a.AuthPathPrefix + "/internal/json/authenticate")
 		registerFn(a.AuthPathPrefix+"/internal/json/authenticate", func(w http.ResponseWriter, r *http.Request) {
-			a.ServeJsonAuthenticate(w, r)
+			a.serveJsonAuthenticate(w, r)
 		})
 
 		a.Log.Println(a.AuthPathPrefix + "/internal/json/new")
 		registerFn(a.AuthPathPrefix+"/internal/json/new", func(w http.ResponseWriter, r *http.Request) {
-			a.ServeJsonNewAccount(w, r)
+			a.serveJsonNewAccount(w, r)
 		})
 
 		a.Log.Println(a.AuthPathPrefix + "/internal/json/password/reset")
 		registerFn(a.AuthPathPrefix+"/internal/json/password/reset", func(w http.ResponseWriter, r *http.Request) {
-			a.ServeJsonPasswordReset(w, r)
+			a.serveJsonPasswordReset(w, r)
 		})
 
 		a.Log.Println(a.AuthPathPrefix + "/internal/json/password/token")
 		registerFn(a.AuthPathPrefix+"/internal/json/password/token", func(w http.ResponseWriter, r *http.Request) {
-			a.ServeJsonPasswordToken(w, r)
+			a.serveJsonPasswordToken(w, r)
 		})
 
 		a.Log.Println(a.AuthPathPrefix + "/internal/json/password/change")
 		registerFn(a.AuthPathPrefix+"/internal/json/password/change", func(w http.ResponseWriter, r *http.Request) {
-			a.ServeJsonPasswordChange(w, r)
+			a.serveJsonPasswordChange(w, r)
 		})
 
 		a.LogFile.Flush()
@@ -296,19 +296,19 @@ func (a *AuthenticationHandler) RegisterHandlers(in MinHandler, out http.Handler
 
 	/*
 	   registerFn(a.AuthPathPrefix + "/internal/std/authenticate", func(w http.ResponseWriter, r *http.Request) {
-	       a.ServeStdAuthenticate(w,r)
+	       a.serveStdAuthenticate(w,r)
 	   })
 
 	   registerFn(a.AuthPathPrefix + "/internal/std/password/reset", func(w http.ResponseWriter, r *http.Request) {
-	       a.ServeStdPasswordReset(w,r)
+	       a.serveStdPasswordReset(w,r)
 	   })
 
 	   registerFn(a.AuthPathPrefix + "/internal/std/password/token", func(w http.ResponseWriter, r *http.Request) {
-	       a.ServeStdPasswordToken(w,r)
+	       a.serveStdPasswordToken(w,r)
 	   })
 
 	   registerFn(a.AuthPathPrefix + "/internal/std/password/change", func(w http.ResponseWriter, r *http.Request) {
-	       a.ServeStdPasswordToken(w,r)
+	       a.serveStdPasswordToken(w,r)
 	   })
 	*/
 
@@ -323,7 +323,7 @@ func (a *AuthenticationHandler) RegisterHandlers(in MinHandler, out http.Handler
 /*
 Login the user if the given username/password combination is valid.
 */
-func (a *AuthenticationHandler) ServeJsonAuthenticate(w http.ResponseWriter, r *http.Request) {
+func (a *AuthenticationHandler) serveJsonAuthenticate(w http.ResponseWriter, r *http.Request) {
 
 	var input = loginInput{}
 
@@ -350,7 +350,7 @@ func (a *AuthenticationHandler) ServeJsonAuthenticate(w http.ResponseWriter, r *
 /*
 Create a new user account.
 */
-func (a *AuthenticationHandler) ServeJsonNewAccount(w http.ResponseWriter, r *http.Request) {
+func (a *AuthenticationHandler) serveJsonNewAccount(w http.ResponseWriter, r *http.Request) {
 
 	var input = newAccountInput{}
 
@@ -403,7 +403,7 @@ func (a *AuthenticationHandler) ServeJsonNewAccount(w http.ResponseWriter, r *ht
 /*
 Send the user an email with a reset password token.
 */
-func (a *AuthenticationHandler) ServeJsonPasswordToken(w http.ResponseWriter, r *http.Request) {
+func (a *AuthenticationHandler) serveJsonPasswordToken(w http.ResponseWriter, r *http.Request) {
 
 	var input = resetTokenInput{}
 
@@ -430,7 +430,7 @@ func (a *AuthenticationHandler) ServeJsonPasswordToken(w http.ResponseWriter, r 
 /*
 Given a valid reset token, user name, and new password, reset the user's password.
 */
-func (a *AuthenticationHandler) ServeJsonPasswordReset(w http.ResponseWriter, r *http.Request) {
+func (a *AuthenticationHandler) serveJsonPasswordReset(w http.ResponseWriter, r *http.Request) {
 
 	var input = changePasswordTokenInput{}
 
@@ -471,7 +471,7 @@ func (a *AuthenticationHandler) ServeJsonPasswordReset(w http.ResponseWriter, r 
 /*
 Change the user's password given a valid username and old password.
 */
-func (a *AuthenticationHandler) ServeJsonPasswordChange(w http.ResponseWriter, r *http.Request) {
+func (a *AuthenticationHandler) serveJsonPasswordChange(w http.ResponseWriter, r *http.Request) {
 
 	var input = changePasswordInput{}
 
